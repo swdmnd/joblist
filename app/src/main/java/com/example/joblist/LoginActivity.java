@@ -9,6 +9,7 @@ import android.content.pm.Signature;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
+import android.view.View;
 import android.widget.Toast;
 
 import com.facebook.AccessToken;
@@ -22,6 +23,12 @@ import com.facebook.appevents.AppEventsLogger;
 import com.facebook.login.LoginManager;
 import com.facebook.login.LoginResult;
 import com.facebook.login.widget.LoginButton;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -31,7 +38,9 @@ public class LoginActivity extends AppCompatActivity {
     private final static String EMAIL = "email";
     private final static String PUBLIC_PROFILE = "public_profile";
     private CallbackManager fbCallbackManager;
-    private ProfileTracker profileTracker;
+    private ProfileTracker fbProfileTracker;
+
+    private GoogleSignInClient gsc;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +72,14 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
+        findViewById(R.id.login_button_google).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent signInIntent = gsc.getSignInIntent();
+                startActivityForResult(signInIntent, 1);
+            }
+        });
+
         try {
             PackageInfo info = getPackageManager().getPackageInfo(
                     "com.example.joblist",
@@ -79,6 +96,32 @@ public class LoginActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // Result returned from launching the Intent from GoogleSignInClient.getSignInIntent(...);
+        if (requestCode == 1) {
+            // The Task returned from this call is always completed, no need to attach
+            // a listener.
+            Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
+            handleSignInResult(task);
+        }
+    }
+
+    private void handleSignInResult(Task<GoogleSignInAccount> completedTask) {
+        try {
+            GoogleSignInAccount account = completedTask.getResult(ApiException.class);
+            if(account != null){
+                Globals.profileName = account.getDisplayName();
+                Globals.loginMethod = Globals.LOGIN_BY_GOOGLE;
+                startActivity(new Intent(getApplicationContext(), ProfileActivity.class));
+            }
+        } catch (ApiException e) {
+
+        }
+    }
+
     private void fbCheckLogin(){
         fbCallbackManager = CallbackManager.Factory.create();
 
@@ -86,7 +129,7 @@ public class LoginActivity extends AppCompatActivity {
         AccessToken accessToken = AccessToken.getCurrentAccessToken();
         boolean isFbLoggedIn = accessToken != null && !accessToken.isExpired();
 
-        profileTracker = new ProfileTracker() {
+        fbProfileTracker = new ProfileTracker() {
             @Override
             protected void onCurrentProfileChanged(
                     Profile oldProfile,
@@ -99,7 +142,6 @@ public class LoginActivity extends AppCompatActivity {
                     Globals.profileName = "";
                     Globals.loginMethod = "";
                 }
-                // App code
             }
         };
 
@@ -109,6 +151,16 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void googleCheckLogin() {
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .build();
 
+        gsc = GoogleSignIn.getClient(getApplicationContext(), gso);
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(getApplicationContext());
+        if(account != null){
+            Globals.profileName = account.getDisplayName();
+            Globals.loginMethod = Globals.LOGIN_BY_GOOGLE;
+            startActivity(new Intent(getApplicationContext(), ProfileActivity.class));
+        }
     }
 }
